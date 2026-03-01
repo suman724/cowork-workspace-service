@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from starlette.responses import Response
 
 from workspace_service.dependencies import get_workspace_service
+from workspace_service.models.requests import CreateWorkspaceRequest
 from workspace_service.services.workspace_service import WorkspaceService
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -15,14 +16,14 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 @router.post("", status_code=201)
 async def create_workspace(
-    body: dict[str, Any],
+    body: CreateWorkspaceRequest,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> dict[str, Any]:
     workspace = await service.create_workspace(
-        tenant_id=body["tenantId"],
-        user_id=body["userId"],
-        workspace_scope=body["workspaceScope"],
-        local_path=body.get("localPath"),
+        tenant_id=body.tenant_id,
+        user_id=body.user_id,
+        workspace_scope=body.workspace_scope,
+        local_path=body.local_path,
     )
     return {
         "workspaceId": workspace.workspace_id,

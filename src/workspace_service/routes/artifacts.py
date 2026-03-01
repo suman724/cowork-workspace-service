@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 
 from workspace_service.dependencies import get_artifact_service
+from workspace_service.models.requests import UploadArtifactRequest
 from workspace_service.services.artifact_service import ArtifactService
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/artifacts", tags=["artifacts"])
@@ -16,19 +17,19 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/artifacts", tags=["artifac
 @router.post("", status_code=201)
 async def upload_artifact(
     workspace_id: str,
-    body: dict[str, Any],
+    body: UploadArtifactRequest,
     service: ArtifactService = Depends(get_artifact_service),
 ) -> dict[str, Any]:
     artifact = await service.upload_artifact(
         workspace_id=workspace_id,
-        session_id=body["sessionId"],
-        task_id=body.get("taskId"),
-        step_id=body.get("stepId"),
-        artifact_type=body["artifactType"],
-        artifact_name=body.get("artifactName"),
-        content_type=body.get("contentType"),
-        content_base64=body.get("contentBase64"),
-        messages=body.get("messages"),
+        session_id=body.session_id,
+        task_id=body.task_id,
+        step_id=body.step_id,
+        artifact_type=body.artifact_type,
+        artifact_name=body.artifact_name,
+        content_type=body.content_type,
+        content_base64=body.content_base64,
+        messages=body.messages,
     )
     return {
         "artifactId": artifact.artifact_id,

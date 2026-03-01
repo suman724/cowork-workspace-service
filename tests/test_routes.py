@@ -50,6 +50,20 @@ class TestWorkspaceRoutes:
         assert resp.status_code == 200
         assert resp.json()["workspaceId"] == ws_id
 
+    async def test_create_missing_tenant_id(self, client: AsyncClient) -> None:
+        resp = await client.post(
+            "/workspaces",
+            json={"userId": "u1", "workspaceScope": "general"},
+        )
+        assert resp.status_code == 422
+
+    async def test_create_empty_workspace_scope(self, client: AsyncClient) -> None:
+        resp = await client.post(
+            "/workspaces",
+            json={"tenantId": "t1", "userId": "u1", "workspaceScope": ""},
+        )
+        assert resp.status_code == 422
+
     async def test_delete_workspace(self, client: AsyncClient) -> None:
         create_resp = await client.post(
             "/workspaces",
@@ -89,6 +103,18 @@ class TestArtifactRoutes:
         dl_resp = await client.get(f"/workspaces/{ws_id}/artifacts/{artifact_id}")
         assert dl_resp.status_code == 200
         assert dl_resp.content == b"test content"
+
+    async def test_upload_missing_session_id(self, client: AsyncClient) -> None:
+        ws_resp = await client.post(
+            "/workspaces",
+            json={"tenantId": "t1", "userId": "u1", "workspaceScope": "general"},
+        )
+        ws_id = ws_resp.json()["workspaceId"]
+        resp = await client.post(
+            f"/workspaces/{ws_id}/artifacts",
+            json={"artifactType": "tool_output", "contentBase64": "dGVzdA=="},
+        )
+        assert resp.status_code == 422
 
     async def test_list_artifacts(self, client: AsyncClient) -> None:
         ws_resp = await client.post(
