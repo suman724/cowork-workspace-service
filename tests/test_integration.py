@@ -319,6 +319,40 @@ class TestArtifactIntegration:
         items = resp.json()
         assert len(items) == 3
 
+    async def test_list_sessions_in_workspace(self, integration_client: AsyncClient) -> None:
+        ws_id = await self._create_workspace(integration_client)
+
+        # Upload artifacts across two sessions with different task IDs
+        for task_id in ["task-1", "task-2"]:
+            await integration_client.post(
+                f"/workspaces/{ws_id}/artifacts",
+                json=_upload_artifact_request(
+                    sessionId="sess-A",
+                    taskId=task_id,
+                    artifactName=f"{task_id}.txt",
+                    raw_content=f"data-{task_id}".encode(),
+                ),
+            )
+        await integration_client.post(
+            f"/workspaces/{ws_id}/artifacts",
+            json=_upload_artifact_request(
+                sessionId="sess-B",
+                taskId="task-10",
+                artifactName="b.txt",
+                raw_content=b"data-b",
+            ),
+        )
+
+        resp = await integration_client.get(f"/workspaces/{ws_id}/sessions")
+        assert resp.status_code == 200
+        body = resp.json()
+        sessions = body["sessions"]
+        assert len(sessions) == 2
+
+        by_id = {s["sessionId"]: s for s in sessions}
+        assert by_id["sess-A"]["taskCount"] == 2
+        assert by_id["sess-B"]["taskCount"] == 1
+
     async def test_delete_workspace_cascades_artifacts(
         self, integration_client: AsyncClient
     ) -> None:
