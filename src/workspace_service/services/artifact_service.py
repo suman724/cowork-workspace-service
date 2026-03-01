@@ -75,14 +75,11 @@ class ArtifactService:
         artifact_id = str(uuid.uuid4())
         s3_key = f"{workspace_id}/{session_id}/{artifact_id}"
 
-        # For session_history, overwrite semantics: delete old ones for this session
+        # Collect old session_history artifacts before writing the replacement
+        old_history: list[ArtifactDomain] = []
         if artifact_type == "session_history":
             existing = await self._artifact_repo.list_by_session(workspace_id, session_id)
-            for old in existing:
-                if old.artifact_type == "session_history":
-                    if old.s3_key:
-                        await self._artifact_store.delete(old.s3_key)
-                    await self._artifact_repo.delete(workspace_id, old.artifact_id)
+            old_history = [a for a in existing if a.artifact_type == "session_history"]
 
         # Create metadata first
         now = datetime.now(UTC)
@@ -108,6 +105,12 @@ class ArtifactService:
         except Exception:
             await self._artifact_repo.delete(workspace_id, artifact_id)
             raise
+
+        # Only now remove prior session_history records (new snapshot is durable)
+        for old in old_history:
+            if old.s3_key:
+                await self._artifact_store.delete(old.s3_key)
+            await self._artifact_repo.delete(workspace_id, old.artifact_id)
 
         await self._workspace_repo.update_last_active(workspace_id)
         logger.info("artifact_uploaded", artifact_id=artifact_id, workspace_id=workspace_id)
