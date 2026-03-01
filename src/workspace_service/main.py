@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from workspace_service.config import Settings
 from workspace_service.exceptions import ServiceError
+from workspace_service.middleware import RequestIdMiddleware
 from workspace_service.repositories.dynamo_artifact import DynamoArtifactRepository
 from workspace_service.repositories.dynamo_workspace import DynamoWorkspaceRepository
 from workspace_service.repositories.s3_store import S3ArtifactStore
@@ -30,6 +31,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     log_level = logging.getLevelNamesMapping().get(settings.log_level.upper(), logging.INFO)
     structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ],
         wrapper_class=structlog.make_filtering_bound_logger(log_level),
     )
 
@@ -67,6 +77,8 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    app.add_middleware(RequestIdMiddleware)
 
     app.include_router(health.router)
     app.include_router(workspaces.router)
