@@ -64,7 +64,10 @@ class ArtifactService:
             content = json.dumps(messages).encode("utf-8")
             content_type = content_type or "application/json"
         elif content_base64:
-            content = base64.b64decode(content_base64)
+            try:
+                content = base64.b64decode(content_base64)
+            except Exception as err:
+                raise ValidationError("contentBase64 is not valid base64") from err
         else:
             raise ValidationError("contentBase64 required for non-history artifacts")
 

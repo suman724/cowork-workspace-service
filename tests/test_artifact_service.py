@@ -118,6 +118,20 @@ class TestUploadArtifact:
                 artifact_type="tool_output",
             )
 
+    async def test_upload_invalid_base64(
+        self, workspace_service: WorkspaceService, artifact_service: ArtifactService
+    ) -> None:
+        ws = await workspace_service.create_workspace(
+            tenant_id="t1", user_id="u1", workspace_scope="general"
+        )
+        with pytest.raises(ValidationError, match="not valid base64"):
+            await artifact_service.upload_artifact(
+                workspace_id=ws.workspace_id,
+                session_id="sess-1",
+                artifact_type="tool_output",
+                content_base64="!!!not-valid-base64!!!",
+            )
+
     async def test_upload_session_history_missing_messages(
         self, workspace_service: WorkspaceService, artifact_service: ArtifactService
     ) -> None:
