@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -70,6 +72,23 @@ async def get_workspace(
     }
 
 
+@router.get("/{workspace_id}/sessions")
+async def list_workspace_sessions(
+    workspace_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    next_token: str | None = Query(default=None, alias="nextToken"),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> dict[str, Any]:
+    offset = _decode_token(next_token)
+    sessions, has_more = await service.list_workspace_sessions(
+        workspace_id, limit=limit, offset=offset
+    )
+    result: dict[str, Any] = {"sessions": sessions}
+    if has_more:
+        result["nextToken"] = _encode_token(offset + limit)
+    return result
+
+
 @router.delete("/{workspace_id}", status_code=204)
 async def delete_workspace(
     workspace_id: str,
@@ -77,3 +96,17 @@ async def delete_workspace(
 ) -> Response:
     await service.delete_workspace(workspace_id)
     return Response(status_code=204)
+
+
+def _encode_token(offset: int) -> str:
+    return base64.urlsafe_b64encode(json.dumps({"offset": offset}).encode()).decode()
+
+
+def _decode_token(token: str | None) -> int:
+    if token is None:
+        return 0
+    try:
+        data = json.loads(base64.urlsafe_b64decode(token))
+        return int(data["offset"])
+    except (ValueError, KeyError, json.JSONDecodeError):
+        return 0

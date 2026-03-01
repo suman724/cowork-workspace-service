@@ -73,6 +73,73 @@ class TestWorkspaceRoutes:
         resp = await client.delete(f"/workspaces/{ws_id}")
         assert resp.status_code == 204
 
+    async def test_list_workspace_sessions(self, client: AsyncClient) -> None:
+        ws_resp = await client.post(
+            "/workspaces",
+            json={"tenantId": "t1", "userId": "u1", "workspaceScope": "general"},
+        )
+        ws_id = ws_resp.json()["workspaceId"]
+
+        content = base64.b64encode(b"data").decode()
+        for sess_id in ["sess-1", "sess-2"]:
+            await client.post(
+                f"/workspaces/{ws_id}/artifacts",
+                json={
+                    "sessionId": sess_id,
+                    "artifactType": "tool_output",
+                    "contentBase64": content,
+                },
+            )
+
+        resp = await client.get(f"/workspaces/{ws_id}/sessions")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "sessions" in body
+        assert len(body["sessions"]) == 2
+        assert all("sessionId" in s for s in body["sessions"])
+        assert all("createdAt" in s for s in body["sessions"])
+        assert all("lastTaskAt" in s for s in body["sessions"])
+        assert all("taskCount" in s for s in body["sessions"])
+
+    async def test_list_workspace_sessions_pagination(self, client: AsyncClient) -> None:
+        ws_resp = await client.post(
+            "/workspaces",
+            json={"tenantId": "t1", "userId": "u1", "workspaceScope": "general"},
+        )
+        ws_id = ws_resp.json()["workspaceId"]
+
+        content = base64.b64encode(b"data").decode()
+        for i in range(3):
+            await client.post(
+                f"/workspaces/{ws_id}/artifacts",
+                json={
+                    "sessionId": f"sess-{i}",
+                    "artifactType": "tool_output",
+                    "contentBase64": content,
+                },
+            )
+
+        # First page
+        resp1 = await client.get(f"/workspaces/{ws_id}/sessions", params={"limit": 2})
+        assert resp1.status_code == 200
+        body1 = resp1.json()
+        assert len(body1["sessions"]) == 2
+        assert "nextToken" in body1
+
+        # Second page using nextToken
+        resp2 = await client.get(
+            f"/workspaces/{ws_id}/sessions",
+            params={"limit": 2, "nextToken": body1["nextToken"]},
+        )
+        assert resp2.status_code == 200
+        body2 = resp2.json()
+        assert len(body2["sessions"]) == 1
+        assert "nextToken" not in body2
+
+    async def test_list_workspace_sessions_not_found(self, client: AsyncClient) -> None:
+        resp = await client.get("/workspaces/nonexistent/sessions")
+        assert resp.status_code == 404
+
 
 @pytest.mark.unit
 class TestArtifactRoutes:

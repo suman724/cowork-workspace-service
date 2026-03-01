@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
 from workspace_service.exceptions import ValidationError, WorkspaceNotFoundError
-from workspace_service.models.domain import WorkspaceDomain
+from workspace_service.models.domain import ArtifactDomain, WorkspaceDomain
 from workspace_service.repositories.base import (
     ArtifactRepository,
     ArtifactStore,
@@ -105,6 +107,54 @@ class WorkspaceService:
         # Delete workspace record
         await self._workspace_repo.delete(workspace_id)
         logger.info("workspace_deleted", workspace_id=workspace_id)
+
+    async def list_workspace_sessions(
+        self,
+        workspace_id: str,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """List sessions in a workspace, aggregated from artifact metadata.
+
+        Returns a tuple of (sessions_page, has_more).
+        """
+        workspace = await self._workspace_repo.get(workspace_id)
+        if workspace is None:
+            raise WorkspaceNotFoundError(workspace_id)
+
+        artifacts = await self._artifact_repo.list_by_workspace(workspace_id)
+        sessions = self._aggregate_sessions(artifacts)
+
+        # Sort by lastTaskAt descending (most recent first)
+        sessions.sort(key=lambda s: s["lastTaskAt"], reverse=True)
+
+        # Paginate
+        page = sessions[offset : offset + limit]
+        has_more = offset + limit < len(sessions)
+        return page, has_more
+
+    @staticmethod
+    def _aggregate_sessions(artifacts: list[ArtifactDomain]) -> list[dict[str, Any]]:
+        """Group artifacts by sessionId and compute summary fields."""
+        groups: dict[str, list[ArtifactDomain]] = defaultdict(list)
+        for artifact in artifacts:
+            groups[artifact.session_id].append(artifact)
+
+        sessions: list[dict[str, Any]] = []
+        for session_id, session_artifacts in groups.items():
+            created_at = min(a.created_at for a in session_artifacts)
+            last_task_at = max(a.created_at for a in session_artifacts)
+            task_ids = {a.task_id for a in session_artifacts if a.task_id is not None}
+            sessions.append(
+                {
+                    "sessionId": session_id,
+                    "createdAt": created_at.isoformat(),
+                    "lastTaskAt": last_task_at.isoformat(),
+                    "taskCount": len(task_ids),
+                }
+            )
+        return sessions
 
     async def list_session_artifacts(
         self, workspace_id: str, session_id: str
