@@ -38,12 +38,20 @@ class DynamoWorkspaceRepository:
         return _from_item(items[0]) if items else None
 
     async def list_by_tenant_user(self, tenant_id: str, user_id: str) -> list[WorkspaceDomain]:
-        resp = await self._table.query(
-            IndexName="tenantId-userId-index",
-            KeyConditionExpression="tenantId = :tid AND userId = :uid",
-            ExpressionAttributeValues={":tid": tenant_id, ":uid": user_id},
-        )
-        return [_from_item(item) for item in resp.get("Items", [])]
+        items: list[dict[str, Any]] = []
+        kwargs: dict[str, Any] = {
+            "IndexName": "tenantId-userId-index",
+            "KeyConditionExpression": "tenantId = :tid AND userId = :uid",
+            "ExpressionAttributeValues": {":tid": tenant_id, ":uid": user_id},
+        }
+        while True:
+            resp = await self._table.query(**kwargs)
+            items.extend(resp.get("Items", []))
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+        return [_from_item(item) for item in items]
 
     async def update_last_active(self, workspace_id: str) -> None:
         now = datetime.now(UTC).isoformat()

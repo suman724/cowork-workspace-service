@@ -108,10 +108,17 @@ class WorkspaceService:
 
     async def list_session_artifacts(
         self, workspace_id: str, session_id: str
-    ) -> list[WorkspaceDomain]:
-        """Get session summary (artifacts for a session under a workspace)."""
+    ) -> list[dict[str, str]]:
+        """Get session summary (artifact list for a session under a workspace)."""
         workspace = await self._workspace_repo.get(workspace_id)
         if workspace is None:
             raise WorkspaceNotFoundError(workspace_id)
-        # Return workspace for now; session artifacts are fetched via artifact service
-        return [workspace]
+        artifacts = await self._artifact_repo.list_by_session(workspace_id, session_id)
+        return [
+            {
+                "artifactId": a.artifact_id,
+                "artifactType": a.artifact_type,
+                "createdAt": a.created_at.isoformat(),
+            }
+            for a in artifacts
+        ]
