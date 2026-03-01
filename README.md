@@ -10,6 +10,7 @@ Workspace and artifact storage service for the cowork platform. Manages workspac
 | GET | `/workspaces?tenantId=...&userId=...` | List workspaces |
 | GET | `/workspaces/{id}` | Get workspace details |
 | DELETE | `/workspaces/{id}` | Delete workspace (cascades artifacts) |
+| GET | `/workspaces/{id}/sessions` | List sessions (paginated via `limit` & `nextToken`) |
 | POST | `/workspaces/{id}/artifacts` | Upload an artifact |
 | GET | `/workspaces/{id}/artifacts/{artifactId}` | Download artifact content |
 | GET | `/workspaces/{id}/artifacts` | List artifacts |

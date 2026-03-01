@@ -17,7 +17,7 @@ Python, FastAPI, PynamoDB/boto3 (DynamoDB + S3), Pydantic models from `cowork-pl
 | `POST` | `/workspaces` | Create/resolve workspace (called by Session Service) |
 | `POST` | `/workspaces/{id}/artifacts` | Upload artifact (tool output, file diff, or session_history) |
 | `GET` | `/workspaces/{id}/artifacts/{artifactId}` | Retrieve artifact |
-| `GET` | `/workspaces/{id}/sessions` | List sessions in workspace |
+| `GET` | `/workspaces/{id}/sessions` | List sessions in workspace (paginated: `limit`, `nextToken`) |
 | `GET` | `/workspaces?tenantId=...&userId=...` | List workspaces for a user |
 | `DELETE` | `/workspaces/{id}` | Delete workspace and all artifacts |
 
