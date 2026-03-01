@@ -358,17 +358,30 @@ class TestArtifactIntegration:
     ) -> None:
         ws_id = await self._create_workspace(integration_client)
 
+        artifact_ids: list[str] = []
         for i in range(2):
-            await integration_client.post(
+            upload_resp = await integration_client.post(
                 f"/workspaces/{ws_id}/artifacts",
                 json=_upload_artifact_request(
                     artifactName=f"cascade-{i}.txt",
                     raw_content=f"cascade {i}".encode(),
                 ),
             )
+            artifact_ids.append(upload_resp.json()["artifactId"])
+
+        # Verify artifacts exist before deletion
+        list_resp = await integration_client.get(f"/workspaces/{ws_id}/artifacts")
+        assert list_resp.status_code == 200
+        assert len(list_resp.json()) == 2
 
         resp = await integration_client.delete(f"/workspaces/{ws_id}")
         assert resp.status_code == 204
 
+        # Workspace itself is gone
         get_resp = await integration_client.get(f"/workspaces/{ws_id}")
         assert get_resp.status_code == 404
+
+        # Artifact downloads should fail (metadata deleted)
+        for aid in artifact_ids:
+            dl_resp = await integration_client.get(f"/workspaces/{ws_id}/artifacts/{aid}")
+            assert dl_resp.status_code == 404
