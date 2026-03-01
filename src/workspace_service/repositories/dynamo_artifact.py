@@ -30,24 +30,37 @@ class DynamoArtifactRepository:
         return _from_item(item) if item else None
 
     async def list_by_workspace(self, workspace_id: str) -> list[ArtifactDomain]:
-        resp = await self._table.query(
-            KeyConditionExpression="workspaceId = :wid",
-            ExpressionAttributeValues={":wid": workspace_id},
-        )
-        return [_from_item(item) for item in resp.get("Items", [])]
+        items: list[dict[str, Any]] = []
+        kwargs: dict[str, Any] = {
+            "KeyConditionExpression": "workspaceId = :wid",
+            "ExpressionAttributeValues": {":wid": workspace_id},
+        }
+        while True:
+            resp = await self._table.query(**kwargs)
+            items.extend(resp.get("Items", []))
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+        return [_from_item(item) for item in items]
 
     async def list_by_session(self, workspace_id: str, session_id: str) -> list[ArtifactDomain]:
-        resp = await self._table.query(
-            IndexName="sessionId-type-index",
-            KeyConditionExpression="sessionId = :sid",
-            ExpressionAttributeValues={":sid": session_id},
-        )
-        # Filter to workspace (GSI doesn't include workspaceId as condition)
-        return [
-            _from_item(item)
-            for item in resp.get("Items", [])
-            if item.get("workspaceId") == workspace_id
-        ]
+        items: list[dict[str, Any]] = []
+        kwargs: dict[str, Any] = {
+            "IndexName": "sessionId-type-index",
+            "KeyConditionExpression": "sessionId = :sid",
+            "ExpressionAttributeValues": {":sid": session_id},
+        }
+        while True:
+            resp = await self._table.query(**kwargs)
+            items.extend(
+                item for item in resp.get("Items", []) if item.get("workspaceId") == workspace_id
+            )
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+        return [_from_item(item) for item in items]
 
     async def delete(self, workspace_id: str, artifact_id: str) -> None:
         await self._table.delete_item(Key={"workspaceId": workspace_id, "artifactId": artifact_id})

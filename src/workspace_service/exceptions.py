@@ -17,7 +17,7 @@ class NotFoundError(ServiceError):
     """Resource not found."""
 
     def __init__(self, message: str = "Not found") -> None:
-        super().__init__(message, code="SESSION_NOT_FOUND", status_code=404)
+        super().__init__(message, code="NOT_FOUND", status_code=404)
 
 
 class WorkspaceNotFoundError(ServiceError):
@@ -25,7 +25,7 @@ class WorkspaceNotFoundError(ServiceError):
 
     def __init__(self, workspace_id: str = "") -> None:
         msg = f"Workspace not found: {workspace_id}" if workspace_id else "Workspace not found"
-        super().__init__(msg, code="SESSION_NOT_FOUND", status_code=404)
+        super().__init__(msg, code="WORKSPACE_NOT_FOUND", status_code=404)
 
 
 class ArtifactNotFoundError(ServiceError):
