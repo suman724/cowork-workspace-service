@@ -9,8 +9,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from starlette.responses import Response
 
-from workspace_service.dependencies import get_workspace_service
+from workspace_service.dependencies import get_artifact_service, get_workspace_service
 from workspace_service.models.requests import CreateWorkspaceRequest
+from workspace_service.services.artifact_service import ArtifactService
 from workspace_service.services.workspace_service import WorkspaceService
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -87,6 +88,30 @@ async def list_workspace_sessions(
     if has_more:
         result["nextToken"] = _encode_token(offset + limit)
     return result
+
+
+@router.get("/{workspace_id}/sessions/{session_id}/history")
+async def get_session_history(
+    workspace_id: str,
+    session_id: str,
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+) -> list[dict[str, Any]]:
+    """Return conversation messages for a session.
+
+    Finds the latest session_history artifact and returns its content.
+    """
+    artifacts = await artifact_service.list_session_artifacts(workspace_id, session_id)
+    history_artifacts = [a for a in artifacts if a.artifact_type == "session_history"]
+    if not history_artifacts:
+        return []
+
+    # Take the most recent session_history artifact
+    history_artifacts.sort(key=lambda a: a.created_at, reverse=True)
+    artifact = history_artifacts[0]
+
+    content_bytes, _ = await artifact_service.download_artifact(workspace_id, artifact.artifact_id)
+    messages: list[dict[str, Any]] = json.loads(content_bytes)
+    return messages
 
 
 @router.delete("/{workspace_id}", status_code=204)

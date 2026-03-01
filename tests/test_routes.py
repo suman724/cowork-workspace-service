@@ -140,6 +140,64 @@ class TestWorkspaceRoutes:
         resp = await client.get("/workspaces/nonexistent/sessions")
         assert resp.status_code == 404
 
+    async def test_get_session_history(self, client: AsyncClient) -> None:
+        ws_resp = await client.post(
+            "/workspaces",
+            json={"tenantId": "t1", "userId": "u1", "workspaceScope": "general"},
+        )
+        ws_id = ws_resp.json()["workspaceId"]
+
+        # Upload a session_history artifact
+        messages = [
+            {
+                "role": "user",
+                "content": "Hello",
+                "messageId": "m1",
+                "sessionId": "s1",
+                "taskId": "t1",
+                "timestamp": "2026-03-01T00:00:00Z",
+            },
+            {
+                "role": "assistant",
+                "content": "Hi there",
+                "messageId": "m2",
+                "sessionId": "s1",
+                "taskId": "t1",
+                "timestamp": "2026-03-01T00:00:01Z",
+            },
+        ]
+        upload_resp = await client.post(
+            f"/workspaces/{ws_id}/artifacts",
+            json={
+                "sessionId": "sess-1",
+                "artifactType": "session_history",
+                "messages": messages,
+            },
+        )
+        assert upload_resp.status_code == 201
+
+        # Retrieve history via convenience endpoint
+        resp = await client.get(f"/workspaces/{ws_id}/sessions/sess-1/history")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+        assert data[0]["role"] == "user"
+        assert data[0]["content"] == "Hello"
+        assert data[1]["role"] == "assistant"
+        assert data[1]["content"] == "Hi there"
+
+    async def test_get_session_history_empty(self, client: AsyncClient) -> None:
+        ws_resp = await client.post(
+            "/workspaces",
+            json={"tenantId": "t1", "userId": "u1", "workspaceScope": "general"},
+        )
+        ws_id = ws_resp.json()["workspaceId"]
+
+        # No history uploaded — should return empty list
+        resp = await client.get(f"/workspaces/{ws_id}/sessions/sess-none/history")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
 
 @pytest.mark.unit
 class TestArtifactRoutes:
