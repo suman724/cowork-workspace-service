@@ -190,18 +190,14 @@ async def integration_client() -> AsyncIterator[AsyncClient]:
 @pytest.mark.integration
 class TestWorkspaceIntegration:
     async def test_create_workspace_general(self, integration_client: AsyncClient) -> None:
-        resp = await integration_client.post(
-            "/workspaces", json=_create_workspace_request()
-        )
+        resp = await integration_client.post("/workspaces", json=_create_workspace_request())
         assert resp.status_code == 201
         body = resp.json()
         assert "workspaceId" in body
         assert body["workspaceScope"] == "general"
         assert "createdAt" in body
 
-    async def test_create_workspace_local_idempotent(
-        self, integration_client: AsyncClient
-    ) -> None:
+    async def test_create_workspace_local_idempotent(self, integration_client: AsyncClient) -> None:
         unique_path = f"/projects/test-{uuid.uuid4().hex[:8]}"
         req = _create_workspace_request(workspaceScope="local", localPath=unique_path)
 
@@ -216,9 +212,7 @@ class TestWorkspaceIntegration:
         assert ws_id_1 == ws_id_2
 
     async def test_get_workspace(self, integration_client: AsyncClient) -> None:
-        create_resp = await integration_client.post(
-            "/workspaces", json=_create_workspace_request()
-        )
+        create_resp = await integration_client.post("/workspaces", json=_create_workspace_request())
         ws_id = create_resp.json()["workspaceId"]
 
         resp = await integration_client.get(f"/workspaces/{ws_id}")
@@ -252,9 +246,7 @@ class TestWorkspaceIntegration:
         assert all(ws["tenantId"] == unique_tenant for ws in items)
 
     async def test_delete_workspace(self, integration_client: AsyncClient) -> None:
-        create_resp = await integration_client.post(
-            "/workspaces", json=_create_workspace_request()
-        )
+        create_resp = await integration_client.post("/workspaces", json=_create_workspace_request())
         ws_id = create_resp.json()["workspaceId"]
 
         resp = await integration_client.delete(f"/workspaces/{ws_id}")
@@ -270,9 +262,7 @@ class TestArtifactIntegration:
         resp = await client.post("/workspaces", json=_create_workspace_request())
         return resp.json()["workspaceId"]
 
-    async def test_upload_and_download_artifact(
-        self, integration_client: AsyncClient
-    ) -> None:
+    async def test_upload_and_download_artifact(self, integration_client: AsyncClient) -> None:
         ws_id = await self._create_workspace(integration_client)
         content = b"integration test content"
 
@@ -285,9 +275,7 @@ class TestArtifactIntegration:
         assert "artifactId" in body
 
         artifact_id = body["artifactId"]
-        download_resp = await integration_client.get(
-            f"/workspaces/{ws_id}/artifacts/{artifact_id}"
-        )
+        download_resp = await integration_client.get(f"/workspaces/{ws_id}/artifacts/{artifact_id}")
         assert download_resp.status_code == 200
         assert download_resp.content == content
 
@@ -309,9 +297,7 @@ class TestArtifactIntegration:
         assert upload_resp.status_code == 201
         artifact_id = upload_resp.json()["artifactId"]
 
-        download_resp = await integration_client.get(
-            f"/workspaces/{ws_id}/artifacts/{artifact_id}"
-        )
+        download_resp = await integration_client.get(f"/workspaces/{ws_id}/artifacts/{artifact_id}")
         assert download_resp.status_code == 200
         downloaded = json.loads(download_resp.content)
         assert downloaded == messages
