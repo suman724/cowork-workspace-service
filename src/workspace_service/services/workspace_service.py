@@ -81,12 +81,22 @@ class WorkspaceService:
         if workspace is None:
             raise WorkspaceNotFoundError(workspace_id)
 
-        # Cascade: delete artifact metadata
+        # Cascade: collect artifacts, delete metadata first, then S3 objects.
+        # Metadata-first ordering means a partial failure leaves orphaned S3
+        # objects (harmless) rather than metadata pointing to missing S3 keys.
         artifacts = await self._artifact_repo.list_by_workspace(workspace_id)
+        s3_keys: list[str] = []
         for artifact in artifacts:
             if artifact.s3_key:
-                await self._artifact_store.delete(artifact.s3_key)
+                s3_keys.append(artifact.s3_key)
             await self._artifact_repo.delete(workspace_id, artifact.artifact_id)
+
+        # Best-effort S3 cleanup — log but do not raise on individual failures
+        for key in s3_keys:
+            try:
+                await self._artifact_store.delete(key)
+            except Exception:
+                logger.warning("s3_delete_failed", s3_key=key, workspace_id=workspace_id)
 
         # Delete workspace record
         await self._workspace_repo.delete(workspace_id)
