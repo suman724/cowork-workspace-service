@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import structlog
 
-from workspace_service.exceptions import WorkspaceNotFoundError
+from workspace_service.exceptions import ValidationError, WorkspaceNotFoundError
 from workspace_service.models.domain import WorkspaceDomain
 from workspace_service.repositories.base import (
     ArtifactRepository,
@@ -37,6 +37,10 @@ class WorkspaceService:
         workspace_scope: str,
         local_path: str | None = None,
     ) -> WorkspaceDomain:
+        # Local scope requires a local_path for idempotent resolution
+        if workspace_scope == "local" and not local_path:
+            raise ValidationError("localPath is required for local workspace scope")
+
         # For local scope, check idempotency via local_path_key
         if workspace_scope == "local" and local_path:
             local_path_key = f"{tenant_id}#{user_id}#{local_path}"

@@ -13,6 +13,7 @@ from workspace_service.config import Settings
 from workspace_service.exceptions import (
     ArtifactNotFoundError,
     ArtifactTooLargeError,
+    StorageError,
     ValidationError,
     WorkspaceNotFoundError,
 )
@@ -105,15 +106,25 @@ class ArtifactService:
         try:
             ct = content_type or "application/octet-stream"
             await self._artifact_store.upload(s3_key, content, ct)
-        except Exception:
-            await self._artifact_repo.delete(workspace_id, artifact_id)
-            raise
+        except Exception as exc:
+            try:
+                await self._artifact_repo.delete(workspace_id, artifact_id)
+            except Exception:
+                logger.warning("cleanup_failed", artifact_id=artifact_id, workspace_id=workspace_id)
+            raise StorageError(f"Failed to upload artifact {artifact_id}") from exc
 
         # Only now remove prior session_history records (new snapshot is durable)
         for old in old_history:
-            if old.s3_key:
-                await self._artifact_store.delete(old.s3_key)
-            await self._artifact_repo.delete(workspace_id, old.artifact_id)
+            try:
+                if old.s3_key:
+                    await self._artifact_store.delete(old.s3_key)
+                await self._artifact_repo.delete(workspace_id, old.artifact_id)
+            except Exception:
+                logger.warning(
+                    "old_history_cleanup_failed",
+                    artifact_id=old.artifact_id,
+                    workspace_id=workspace_id,
+                )
 
         await self._workspace_repo.update_last_active(workspace_id)
         logger.info("artifact_uploaded", artifact_id=artifact_id, workspace_id=workspace_id)
@@ -127,7 +138,10 @@ class ArtifactService:
         if not artifact.s3_key:
             raise ArtifactNotFoundError(artifact_id)
 
-        content = await self._artifact_store.download(artifact.s3_key)
+        try:
+            content = await self._artifact_store.download(artifact.s3_key)
+        except Exception as exc:
+            raise StorageError(f"Failed to download artifact {artifact_id}") from exc
         return content, artifact.content_type or "application/octet-stream"
 
     async def list_artifacts(self, workspace_id: str) -> list[ArtifactDomain]:
