@@ -69,9 +69,7 @@ class TestWorkspaceRepoCRUD:
 @pytest.mark.service
 @pytest.mark.asyncio
 class TestWorkspaceRepoGSI:
-    async def test_resolve_by_local_path(
-        self, workspace_repo: DynamoWorkspaceRepository
-    ) -> None:
+    async def test_resolve_by_local_path(self, workspace_repo: DynamoWorkspaceRepository) -> None:
         """Resolve a local workspace by localPathKey GSI."""
         ws = _make_workspace(
             workspace_scope="local",

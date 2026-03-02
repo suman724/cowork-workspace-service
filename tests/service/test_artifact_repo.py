@@ -35,9 +35,7 @@ def _make_artifact(
 @pytest.mark.service
 @pytest.mark.asyncio
 class TestArtifactRepoCRUD:
-    async def test_create_and_get_artifact(
-        self, artifact_repo: DynamoArtifactRepository
-    ) -> None:
+    async def test_create_and_get_artifact(self, artifact_repo: DynamoArtifactRepository) -> None:
         """Create an artifact and retrieve it by composite key."""
         art = _make_artifact(
             s3_key="ws-1/art-1",
@@ -75,9 +73,7 @@ class TestArtifactRepoCRUD:
 @pytest.mark.service
 @pytest.mark.asyncio
 class TestArtifactRepoGSI:
-    async def test_list_by_session_and_type(
-        self, artifact_repo: DynamoArtifactRepository
-    ) -> None:
+    async def test_list_by_session_and_type(self, artifact_repo: DynamoArtifactRepository) -> None:
         """List artifacts for a session via GSI."""
         # Create 2 artifacts for the same session
         art1 = _make_artifact(artifact_id="art-1", artifact_type="session_history")
