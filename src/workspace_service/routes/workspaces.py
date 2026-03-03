@@ -123,6 +123,17 @@ async def delete_workspace(
     return Response(status_code=204)
 
 
+@router.delete("/{workspace_id}/sessions/{session_id}", status_code=204)
+async def delete_session_history(
+    workspace_id: str,
+    session_id: str,
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> Response:
+    """Delete all artifacts for a session within a workspace."""
+    await service.delete_session_history(workspace_id, session_id)
+    return Response(status_code=204)
+
+
 def _encode_token(offset: int) -> str:
     return base64.urlsafe_b64encode(json.dumps({"offset": offset}).encode()).decode()
 
