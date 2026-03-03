@@ -108,6 +108,40 @@ class WorkspaceService:
         await self._workspace_repo.delete(workspace_id)
         logger.info("workspace_deleted", workspace_id=workspace_id)
 
+    async def delete_session_history(self, workspace_id: str, session_id: str) -> None:
+        """Delete all artifacts for a session within a workspace."""
+        workspace = await self._workspace_repo.get(workspace_id)
+        if workspace is None:
+            raise WorkspaceNotFoundError(workspace_id)
+
+        artifacts = await self._artifact_repo.list_by_session(workspace_id, session_id)
+
+        # Delete metadata first, collect S3 keys for best-effort cleanup
+        s3_keys: list[str] = []
+        for artifact in artifacts:
+            if artifact.s3_key:
+                s3_keys.append(artifact.s3_key)
+            await self._artifact_repo.delete(workspace_id, artifact.artifact_id)
+
+        # Best-effort S3 cleanup — log but do not raise on individual failures
+        for key in s3_keys:
+            try:
+                await self._artifact_store.delete(key)
+            except Exception:
+                logger.warning(
+                    "s3_delete_failed",
+                    s3_key=key,
+                    workspace_id=workspace_id,
+                    session_id=session_id,
+                )
+
+        logger.info(
+            "session_history_deleted",
+            workspace_id=workspace_id,
+            session_id=session_id,
+            artifact_count=len(artifacts),
+        )
+
     async def list_workspace_sessions(
         self,
         workspace_id: str,

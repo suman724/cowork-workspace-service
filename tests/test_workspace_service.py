@@ -217,3 +217,57 @@ class TestListWorkspaceSessions:
     async def test_workspace_not_found(self, workspace_service: WorkspaceService) -> None:
         with pytest.raises(WorkspaceNotFoundError):
             await workspace_service.list_workspace_sessions("nonexistent")
+
+
+@pytest.mark.unit
+class TestDeleteSessionHistory:
+    async def test_deletes_session_artifacts(
+        self,
+        workspace_service: WorkspaceService,
+        artifact_service: ArtifactService,
+    ) -> None:
+        ws = await workspace_service.create_workspace(
+            tenant_id="t1", user_id="u1", workspace_scope="general"
+        )
+        # Upload artifacts for two sessions
+        await artifact_service.upload_artifact(
+            workspace_id=ws.workspace_id,
+            session_id="sess-keep",
+            artifact_type="tool_output",
+            content_base64=base64.b64encode(b"keep").decode(),
+            content_type="text/plain",
+        )
+        await artifact_service.upload_artifact(
+            workspace_id=ws.workspace_id,
+            session_id="sess-delete",
+            artifact_type="tool_output",
+            content_base64=base64.b64encode(b"delete1").decode(),
+            content_type="text/plain",
+        )
+        await artifact_service.upload_artifact(
+            workspace_id=ws.workspace_id,
+            session_id="sess-delete",
+            artifact_type="session_history",
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        await workspace_service.delete_session_history(ws.workspace_id, "sess-delete")
+
+        sessions, _ = await workspace_service.list_workspace_sessions(ws.workspace_id)
+        session_ids = [s["sessionId"] for s in sessions]
+        assert "sess-keep" in session_ids
+        assert "sess-delete" not in session_ids
+
+    async def test_delete_nonexistent_session_is_noop(
+        self,
+        workspace_service: WorkspaceService,
+    ) -> None:
+        ws = await workspace_service.create_workspace(
+            tenant_id="t1", user_id="u1", workspace_scope="general"
+        )
+        # Should not raise — no artifacts to delete
+        await workspace_service.delete_session_history(ws.workspace_id, "nonexistent-session")
+
+    async def test_workspace_not_found(self, workspace_service: WorkspaceService) -> None:
+        with pytest.raises(WorkspaceNotFoundError):
+            await workspace_service.delete_session_history("nonexistent", "sess-1")

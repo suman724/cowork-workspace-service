@@ -21,6 +21,7 @@ Python, FastAPI, PynamoDB/boto3 (DynamoDB + S3), Pydantic models from `cowork-pl
 | `GET` | `/workspaces/{id}/sessions/{sessionId}/history` | Get conversation messages for a session |
 | `GET` | `/workspaces?tenantId=...&userId=...` | List workspaces for a user |
 | `DELETE` | `/workspaces/{id}` | Delete workspace and all artifacts |
+| `DELETE` | `/workspaces/{id}/sessions/{sessionId}` | Delete all artifacts for a session |
 
 ## Dual Storage Architecture
 

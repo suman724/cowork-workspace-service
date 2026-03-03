@@ -140,6 +140,45 @@ class TestWorkspaceRoutes:
         resp = await client.get("/workspaces/nonexistent/sessions")
         assert resp.status_code == 404
 
+    async def test_delete_session(self, client: AsyncClient) -> None:
+        ws_resp = await client.post(
+            "/workspaces",
+            json={"tenantId": "t1", "userId": "u1", "workspaceScope": "general"},
+        )
+        ws_id = ws_resp.json()["workspaceId"]
+
+        # Upload artifacts for two sessions
+        content = base64.b64encode(b"data").decode()
+        await client.post(
+            f"/workspaces/{ws_id}/artifacts",
+            json={
+                "sessionId": "sess-keep",
+                "artifactType": "tool_output",
+                "contentBase64": content,
+            },
+        )
+        await client.post(
+            f"/workspaces/{ws_id}/artifacts",
+            json={
+                "sessionId": "sess-del",
+                "artifactType": "tool_output",
+                "contentBase64": content,
+            },
+        )
+
+        resp = await client.delete(f"/workspaces/{ws_id}/sessions/sess-del")
+        assert resp.status_code == 204
+
+        # Verify only sess-keep remains
+        sessions_resp = await client.get(f"/workspaces/{ws_id}/sessions")
+        session_ids = [s["sessionId"] for s in sessions_resp.json()["sessions"]]
+        assert "sess-keep" in session_ids
+        assert "sess-del" not in session_ids
+
+    async def test_delete_session_workspace_not_found(self, client: AsyncClient) -> None:
+        resp = await client.delete("/workspaces/nonexistent/sessions/sess-1")
+        assert resp.status_code == 404
+
     async def test_get_session_history(self, client: AsyncClient) -> None:
         ws_resp = await client.post(
             "/workspaces",
