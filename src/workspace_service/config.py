@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     dynamodb_table_prefix: str = "dev-"
     s3_bucket: str = "dev-workspace-artifacts"
     max_artifact_size_bytes: int = 52428800  # 50 MB
+    session_service_url: str = "http://localhost:8000"
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 

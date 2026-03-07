@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import base64
+from unittest.mock import AsyncMock
 
 import pytest
 
+from workspace_service.config import Settings
 from workspace_service.exceptions import WorkspaceNotFoundError
+from workspace_service.repositories.memory import (
+    InMemoryArtifactRepository,
+    InMemoryArtifactStore,
+    InMemoryWorkspaceRepository,
+)
 from workspace_service.services.artifact_service import ArtifactService
 from workspace_service.services.workspace_service import WorkspaceService
 
@@ -271,3 +278,107 @@ class TestDeleteSessionHistory:
     async def test_workspace_not_found(self, workspace_service: WorkspaceService) -> None:
         with pytest.raises(WorkspaceNotFoundError):
             await workspace_service.delete_session_history("nonexistent", "sess-1")
+
+
+@pytest.mark.unit
+class TestSessionNameEnrichment:
+    async def test_enriches_with_session_names(self) -> None:
+        """Session summaries should include name from Session Service."""
+        workspace_repo = InMemoryWorkspaceRepository()
+        artifact_repo = InMemoryArtifactRepository()
+        artifact_store = InMemoryArtifactStore()
+
+        mock_session_client = AsyncMock()
+        mock_session_client.get_session = AsyncMock(
+            return_value={"name": "Fix login bug", "autoNamed": True}
+        )
+
+        ws_service = WorkspaceService(
+            workspace_repo, artifact_repo, artifact_store, session_client=mock_session_client
+        )
+        art_service = ArtifactService(
+            workspace_repo,
+            artifact_repo,
+            artifact_store,
+            Settings(env="test", max_artifact_size_bytes=1048576),
+        )
+
+        ws = await ws_service.create_workspace(
+            tenant_id="t1", user_id="u1", workspace_scope="general"
+        )
+        await art_service.upload_artifact(
+            workspace_id=ws.workspace_id,
+            session_id="sess-1",
+            artifact_type="tool_output",
+            content_base64=base64.b64encode(b"data").decode(),
+            content_type="text/plain",
+        )
+
+        sessions, _ = await ws_service.list_workspace_sessions(ws.workspace_id)
+        assert len(sessions) == 1
+        assert sessions[0]["name"] == "Fix login bug"
+        assert sessions[0]["autoNamed"] is True
+
+    async def test_no_session_client_skips_enrichment(self) -> None:
+        """Without session client, sessions should not have name/autoNamed fields."""
+        workspace_repo = InMemoryWorkspaceRepository()
+        artifact_repo = InMemoryArtifactRepository()
+        artifact_store = InMemoryArtifactStore()
+
+        ws_service = WorkspaceService(workspace_repo, artifact_repo, artifact_store)
+        art_service = ArtifactService(
+            workspace_repo,
+            artifact_repo,
+            artifact_store,
+            Settings(env="test", max_artifact_size_bytes=1048576),
+        )
+
+        ws = await ws_service.create_workspace(
+            tenant_id="t1", user_id="u1", workspace_scope="general"
+        )
+        await art_service.upload_artifact(
+            workspace_id=ws.workspace_id,
+            session_id="sess-1",
+            artifact_type="tool_output",
+            content_base64=base64.b64encode(b"data").decode(),
+            content_type="text/plain",
+        )
+
+        sessions, _ = await ws_service.list_workspace_sessions(ws.workspace_id)
+        assert len(sessions) == 1
+        assert "name" not in sessions[0]
+
+    async def test_enrichment_failure_defaults_to_empty(self) -> None:
+        """If Session Service call fails, name should default to empty string."""
+        workspace_repo = InMemoryWorkspaceRepository()
+        artifact_repo = InMemoryArtifactRepository()
+        artifact_store = InMemoryArtifactStore()
+
+        mock_session_client = AsyncMock()
+        mock_session_client.get_session = AsyncMock(side_effect=Exception("connection refused"))
+
+        ws_service = WorkspaceService(
+            workspace_repo, artifact_repo, artifact_store, session_client=mock_session_client
+        )
+        art_service = ArtifactService(
+            workspace_repo,
+            artifact_repo,
+            artifact_store,
+            Settings(env="test", max_artifact_size_bytes=1048576),
+        )
+
+        ws = await ws_service.create_workspace(
+            tenant_id="t1", user_id="u1", workspace_scope="general"
+        )
+        await art_service.upload_artifact(
+            workspace_id=ws.workspace_id,
+            session_id="sess-1",
+            artifact_type="tool_output",
+            content_base64=base64.b64encode(b"data").decode(),
+            content_type="text/plain",
+        )
+
+        sessions, _ = await ws_service.list_workspace_sessions(ws.workspace_id)
+        assert len(sessions) == 1
+        assert sessions[0]["name"] == ""
+        assert sessions[0]["autoNamed"] is True

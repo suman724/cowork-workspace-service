@@ -8,10 +8,12 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import aioboto3
+import httpx
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from workspace_service.clients.session_client import SessionClient
 from workspace_service.config import Settings
 from workspace_service.exceptions import ServiceError
 from workspace_service.middleware import RequestIdMiddleware
@@ -59,8 +61,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         artifact_repo = DynamoArtifactRepository(art_table)
         artifact_store = S3ArtifactStore(s3_client, settings.s3_bucket)
 
+        # Session Service client for enriching session summaries with names
+        session_http = httpx.AsyncClient(base_url=settings.session_service_url, timeout=10.0)
+        session_client = SessionClient(session_http)
+
         app.state.workspace_service = WorkspaceService(
-            workspace_repo, artifact_repo, artifact_store
+            workspace_repo, artifact_repo, artifact_store, session_client=session_client
         )
         app.state.artifact_service = ArtifactService(
             workspace_repo, artifact_repo, artifact_store, settings
@@ -68,6 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         logger.info("workspace_service_started", env=settings.env)
         yield
+        await session_client.close()
         logger.info("workspace_service_stopped")
 
 
