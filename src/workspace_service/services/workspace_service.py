@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -17,6 +17,9 @@ from workspace_service.repositories.base import (
     WorkspaceRepository,
 )
 
+if TYPE_CHECKING:
+    from workspace_service.clients.session_client import SessionClient
+
 logger = structlog.get_logger()
 
 
@@ -26,10 +29,12 @@ class WorkspaceService:
         workspace_repo: WorkspaceRepository,
         artifact_repo: ArtifactRepository,
         artifact_store: ArtifactStore,
+        session_client: SessionClient | None = None,
     ) -> None:
         self._workspace_repo = workspace_repo
         self._artifact_repo = artifact_repo
         self._artifact_store = artifact_store
+        self._session_client = session_client
 
     async def create_workspace(
         self,
@@ -160,6 +165,9 @@ class WorkspaceService:
         artifacts = await self._artifact_repo.list_by_workspace(workspace_id)
         sessions = self._aggregate_sessions(artifacts)
 
+        # Enrich with session names from Session Service (best-effort)
+        await self._enrich_session_names(sessions)
+
         # Sort by lastTaskAt descending (most recent first)
         sessions.sort(key=lambda s: s["lastTaskAt"], reverse=True)
 
@@ -189,6 +197,19 @@ class WorkspaceService:
                 }
             )
         return sessions
+
+    async def _enrich_session_names(self, sessions: list[dict[str, Any]]) -> None:
+        """Enrich session summaries with names from Session Service (best-effort)."""
+        if not self._session_client:
+            return
+        for summary in sessions:
+            try:
+                session_data = await self._session_client.get_session(summary["sessionId"])
+                summary["name"] = session_data.get("name", "")
+                summary["autoNamed"] = session_data.get("autoNamed", True)
+            except Exception:
+                summary["name"] = ""
+                summary["autoNamed"] = True
 
     async def list_session_artifacts(
         self, workspace_id: str, session_id: str
