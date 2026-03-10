@@ -67,7 +67,7 @@ One `session_history` artifact per session. Each task completion **overwrites** 
 
 ## S3 Bucket: `{env}-workspace-artifacts`
 
-Object key: `{workspaceId}/{artifactId}`
+Object key: `{workspaceId}/{sessionId}/{artifactId}`
 
 ## Repository Pattern
 
