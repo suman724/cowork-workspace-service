@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import Response
 
 from workspace_service.dependencies import get_file_service
+from workspace_service.exceptions import ArtifactTooLargeError
 from workspace_service.services.file_service import WorkspaceFileService
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/files", tags=["files"])
@@ -20,7 +21,21 @@ async def upload_file(
     path: str,
     service: WorkspaceFileService = Depends(get_file_service),
 ) -> dict[str, Any]:
-    content = await file.read()
+    # Stream the upload with early-exit size check to avoid loading
+    # arbitrarily large files into memory before rejecting them.
+    max_size = service._settings.max_artifact_size_bytes
+    chunk_size = 256 * 1024  # 256 KB chunks
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_size:
+            raise ArtifactTooLargeError(total, max_size)
+        chunks.append(chunk)
+    content = b"".join(chunks)
     content_type = file.content_type or "application/octet-stream"
     result = await service.upload_file(workspace_id, path, content, content_type)
     return result

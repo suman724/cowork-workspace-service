@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import posixpath
 import re
 
@@ -9,7 +10,9 @@ import structlog
 
 from workspace_service.config import Settings
 from workspace_service.exceptions import (
+    ArtifactNotFoundError,
     ArtifactTooLargeError,
+    StorageError,
     ValidationError,
     WorkspaceNotFoundError,
 )
@@ -30,6 +33,8 @@ def _validate_file_path(file_path: str) -> str:
     """
     if not file_path or file_path.isspace():
         raise ValidationError("File path must not be empty")
+    if "\x00" in file_path:
+        raise ValidationError("File path must not contain null bytes")
     if file_path.startswith("/"):
         raise ValidationError("File path must be relative")
     if _TRAVERSAL_PATTERN.search(file_path):
@@ -37,6 +42,8 @@ def _validate_file_path(file_path: str) -> str:
 
     # Normalize: collapse redundant separators, resolve single dots
     normalized = posixpath.normpath(file_path)
+    if normalized == ".":
+        raise ValidationError("File path must not be empty")
     if normalized.startswith(".."):
         raise ValidationError("File path must not escape workspace directory")
     return normalized
@@ -79,7 +86,10 @@ class WorkspaceFileService:
             raise ArtifactTooLargeError(len(content), self._settings.max_artifact_size_bytes)
 
         s3_key = f"{workspace.s3_workspace_prefix}{normalized}"
-        await self._artifact_store.upload(s3_key, content, content_type)
+        try:
+            await self._artifact_store.upload(s3_key, content, content_type)
+        except Exception as exc:
+            raise StorageError(f"Failed to upload file {normalized}") from exc
         await self._workspace_repo.update_last_active(workspace_id)
 
         logger.info(
@@ -100,14 +110,20 @@ class WorkspaceFileService:
         normalized = _validate_file_path(file_path)
         s3_key = f"{workspace.s3_workspace_prefix}{normalized}"
 
-        from workspace_service.exceptions import ArtifactNotFoundError
-
         try:
             content = await self._artifact_store.download(s3_key)
-        except Exception as exc:
+        except FileNotFoundError as exc:
             raise ArtifactNotFoundError(file_path) from exc
+        except Exception as exc:
+            raise StorageError(f"Failed to download file {normalized}") from exc
 
-        return content, "application/octet-stream"
+        content_type = mimetypes.guess_type(normalized)[0] or "application/octet-stream"
+        logger.info(
+            "workspace_file_downloaded",
+            workspace_id=workspace_id,
+            path=normalized,
+        )
+        return content, content_type
 
     async def list_files(
         self,
@@ -119,13 +135,21 @@ class WorkspaceFileService:
         if prefix is None:  # pragma: no cover — guaranteed by _resolve_cloud_workspace
             raise ValidationError("Workspace has no S3 prefix")
 
-        files = await self._artifact_store.list_prefix(prefix)
+        try:
+            files = await self._artifact_store.list_prefix(prefix)
+        except Exception as exc:
+            raise StorageError(f"Failed to list files for workspace {workspace_id}") from exc
         # Strip the workspace prefix to return relative paths
         result: list[dict[str, str | int]] = []
         for entry in files:
             relative = entry["key"][len(prefix) :]
             if relative:  # skip the prefix-only entry if any
                 result.append({"path": relative, "size": entry["size"]})
+        logger.info(
+            "workspace_files_listed",
+            workspace_id=workspace_id,
+            count=len(result),
+        )
         return result
 
     async def delete_file(
@@ -137,7 +161,14 @@ class WorkspaceFileService:
         workspace = await self._resolve_cloud_workspace(workspace_id)
         normalized = _validate_file_path(file_path)
         s3_key = f"{workspace.s3_workspace_prefix}{normalized}"
-        await self._artifact_store.delete(s3_key)
+        try:
+            await self._artifact_store.delete(s3_key)
+        except Exception:
+            logger.warning(
+                "workspace_file_delete_failed",
+                workspace_id=workspace_id,
+                path=normalized,
+            )
         logger.info(
             "workspace_file_deleted",
             workspace_id=workspace_id,

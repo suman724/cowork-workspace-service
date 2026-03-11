@@ -54,6 +54,14 @@ class TestValidateFilePath:
         with pytest.raises(Exception, match="must not contain"):
             _validate_file_path("foo/../../bar")
 
+    def test_rejects_null_byte(self) -> None:
+        with pytest.raises(Exception, match="null bytes"):
+            _validate_file_path("src/\x00evil.py")
+
+    def test_rejects_dot_path(self) -> None:
+        with pytest.raises(Exception, match="must not be empty"):
+            _validate_file_path(".")
+
 
 @pytest.mark.unit
 class TestCloudWorkspaceCreation:

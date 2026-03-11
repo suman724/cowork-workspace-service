@@ -38,9 +38,15 @@ class S3ArtifactStore:
 
     async def delete_prefix(self, prefix: str) -> None:
         paginator = self._s3.get_paginator("list_objects_v2")
+        batch: list[dict[str, str]] = []
         async for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
             for obj in page.get("Contents", []):
-                await self._s3.delete_object(Bucket=self._bucket, Key=obj["Key"])
+                batch.append({"Key": obj["Key"]})
+                if len(batch) >= 1000:
+                    await self._s3.delete_objects(Bucket=self._bucket, Delete={"Objects": batch})
+                    batch = []
+        if batch:
+            await self._s3.delete_objects(Bucket=self._bucket, Delete={"Objects": batch})
         logger.info("s3_delete_prefix", bucket=self._bucket, prefix=prefix)
 
     async def list_prefix(self, prefix: str) -> list[dict[str, Any]]:
