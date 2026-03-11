@@ -64,13 +64,21 @@ class WorkspaceService:
             local_path_key = None
 
         now = datetime.now(UTC)
+        workspace_id = str(uuid.uuid4())
+
+        # Cloud scope gets an S3 workspace prefix for file storage
+        s3_workspace_prefix = (
+            f"{workspace_id}/workspace-files/" if workspace_scope == "cloud" else None
+        )
+
         workspace = WorkspaceDomain(
-            workspace_id=str(uuid.uuid4()),
+            workspace_id=workspace_id,
             workspace_scope=workspace_scope,
             tenant_id=tenant_id,
             user_id=user_id,
             local_path=local_path,
             local_path_key=local_path_key,
+            s3_workspace_prefix=s3_workspace_prefix,
             created_at=now,
             last_active_at=now,
         )
@@ -108,6 +116,17 @@ class WorkspaceService:
                 await self._artifact_store.delete(key)
             except Exception:
                 logger.warning("s3_delete_failed", s3_key=key, workspace_id=workspace_id)
+
+        # Clean up workspace files if cloud scope
+        if workspace.s3_workspace_prefix:
+            try:
+                await self._artifact_store.delete_prefix(workspace.s3_workspace_prefix)
+            except Exception:
+                logger.warning(
+                    "workspace_files_cleanup_failed",
+                    prefix=workspace.s3_workspace_prefix,
+                    workspace_id=workspace_id,
+                )
 
         # Delete workspace record
         await self._workspace_repo.delete(workspace_id)

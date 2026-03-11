@@ -22,6 +22,10 @@ Python, FastAPI, PynamoDB/boto3 (DynamoDB + S3), Pydantic models from `cowork-pl
 | `GET` | `/workspaces?tenantId=...&userId=...` | List workspaces for a user |
 | `DELETE` | `/workspaces/{id}` | Delete workspace and all artifacts |
 | `DELETE` | `/workspaces/{id}/sessions/{sessionId}` | Delete all artifacts for a session |
+| `POST` | `/workspaces/{id}/files` | Upload file (multipart, `path` query param) — cloud only |
+| `GET` | `/workspaces/{id}/files` | List files in workspace — cloud only |
+| `GET` | `/workspaces/{id}/files/{path}` | Download file — cloud only |
+| `DELETE` | `/workspaces/{id}/files/{path}` | Delete file — cloud only |
 
 ## Dual Storage Architecture
 
@@ -34,7 +38,7 @@ Python, FastAPI, PynamoDB/boto3 (DynamoDB + S3), Pydantic models from `cowork-pl
 
 - `local`: Maps to a project directory on client. Reused across sessions. Resolved by `(tenantId, userId, localPath)`.
 - `general`: Single-use per session. Always creates a new workspace.
-- `cloud`: Phase 3+ (TBD).
+- `cloud`: S3-backed workspace for sandbox sessions. Always creates new. Gets `s3_workspace_prefix = "{workspaceId}/workspace-files/"`. Supports file CRUD via `/files` endpoints.
 
 ## Session History
 
@@ -67,7 +71,7 @@ One `session_history` artifact per session. Each task completion **overwrites** 
 
 ## S3 Bucket: `{env}-workspace-artifacts`
 
-Object key: `{workspaceId}/{artifactId}`
+Object key: `{workspaceId}/{sessionId}/{artifactType}/{artifactId}`
 
 ## Repository Pattern
 
@@ -110,10 +114,12 @@ cowork-workspace-service/
         health.py             # GET /health, GET /ready
         workspaces.py         # Workspace CRUD endpoints
         artifacts.py          # Artifact upload/download endpoints
+        files.py              # Workspace file CRUD endpoints (cloud only)
       services/
         __init__.py
         workspace_service.py  # Workspace business logic
         artifact_service.py   # Artifact business logic (DynamoDB metadata + S3 content)
+        file_service.py       # Workspace file operations (cloud scope)
       repositories/
         __init__.py
         base.py               # WorkspaceRepository, ArtifactRepository Protocols

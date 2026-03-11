@@ -20,8 +20,9 @@ from workspace_service.middleware import RequestIdMiddleware
 from workspace_service.repositories.dynamo_artifact import DynamoArtifactRepository
 from workspace_service.repositories.dynamo_workspace import DynamoWorkspaceRepository
 from workspace_service.repositories.s3_store import S3ArtifactStore
-from workspace_service.routes import artifacts, health, workspaces
+from workspace_service.routes import artifacts, files, health, workspaces
 from workspace_service.services.artifact_service import ArtifactService
+from workspace_service.services.file_service import WorkspaceFileService
 from workspace_service.services.workspace_service import WorkspaceService
 
 logger = structlog.get_logger()
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.artifact_service = ArtifactService(
             workspace_repo, artifact_repo, artifact_store, settings
         )
+        app.state.file_service = WorkspaceFileService(workspace_repo, artifact_store, settings)
 
         logger.info("workspace_service_started", env=settings.env)
         yield
@@ -90,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(workspaces.router)
     app.include_router(artifacts.router)
+    app.include_router(files.router)
 
     app.add_exception_handler(ServiceError, _service_error_handler)
     app.add_exception_handler(Exception, _unhandled_error_handler)

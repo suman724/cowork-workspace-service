@@ -17,6 +17,7 @@ class WorkspaceDomain(BaseModel):
     user_id: str
     local_path: str | None = None
     local_path_key: str | None = None  # {tenantId}#{userId}#{localPath} for GSI
+    s3_workspace_prefix: str | None = None  # {workspaceId}/workspace-files/ for cloud scope
     created_at: datetime
     last_active_at: datetime
     updated_at: datetime | None = None

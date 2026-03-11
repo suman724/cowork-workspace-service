@@ -14,6 +14,10 @@ Workspace and artifact storage service for the cowork platform. Manages workspac
 | POST | `/workspaces/{id}/artifacts` | Upload an artifact |
 | GET | `/workspaces/{id}/artifacts/{artifactId}` | Download artifact content |
 | GET | `/workspaces/{id}/artifacts` | List artifacts |
+| POST | `/workspaces/{id}/files` | Upload file (multipart, `path` query param) — cloud only |
+| GET | `/workspaces/{id}/files` | List files in workspace — cloud only |
+| GET | `/workspaces/{id}/files/{path}` | Download file — cloud only |
+| DELETE | `/workspaces/{id}/files/{path}` | Delete file — cloud only |
 | GET | `/health` | Liveness check |
 | GET | `/ready` | Readiness check |
 
@@ -54,11 +58,15 @@ Environment variables (see `.env.example`):
 
 - **local** scope: Idempotent by `{tenantId}#{userId}#{localPath}` via GSI. Returns existing workspace if found.
 - **general** scope: Always creates a new workspace.
-- **cloud** scope: Phase 3+.
+- **cloud** scope: S3-backed workspace for sandbox sessions. Always creates new. Stores `s3WorkspacePrefix` for file CRUD.
 
 ## Artifact Storage
 
 - Metadata stored in DynamoDB (`{env}-artifacts` table)
 - Content stored in S3 (`{env}-workspace-artifacts` bucket)
 - Session history uses overwrite semantics (old snapshot deleted on new upload)
-- Workspace deletion cascades: artifact metadata + S3 content + workspace record
+- Workspace deletion cascades: artifact metadata + S3 content + workspace files + workspace record
+
+## Cloud Workspace Files
+
+Cloud-scoped workspaces support file upload/download/list/delete via the `/files` endpoints. Files are stored in S3 under `{workspaceId}/workspace-files/`. File paths must be relative and are validated against directory traversal attacks. File operations return 400 for non-cloud workspaces.

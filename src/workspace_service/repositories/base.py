@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from workspace_service.models.domain import ArtifactDomain, WorkspaceDomain
 
@@ -49,3 +49,5 @@ class ArtifactStore(Protocol):
     async def delete(self, s3_key: str) -> None: ...
 
     async def delete_prefix(self, prefix: str) -> None: ...
+
+    async def list_prefix(self, prefix: str) -> list[dict[str, Any]]: ...

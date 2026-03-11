@@ -77,7 +77,7 @@ class ArtifactService:
             raise ArtifactTooLargeError(len(content), self._settings.max_artifact_size_bytes)
 
         artifact_id = str(uuid.uuid4())
-        s3_key = f"{workspace_id}/{session_id}/{artifact_id}"
+        s3_key = f"{workspace_id}/{session_id}/{artifact_type}/{artifact_id}"
 
         # Collect old session_history artifacts before writing the replacement
         old_history: list[ArtifactDomain] = []
