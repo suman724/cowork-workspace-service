@@ -11,15 +11,20 @@ from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
 
 from workspace_service.config import Settings
-from workspace_service.dependencies import get_artifact_service, get_workspace_service
+from workspace_service.dependencies import (
+    get_artifact_service,
+    get_file_service,
+    get_workspace_service,
+)
 from workspace_service.exceptions import ServiceError
 from workspace_service.repositories.memory import (
     InMemoryArtifactRepository,
     InMemoryArtifactStore,
     InMemoryWorkspaceRepository,
 )
-from workspace_service.routes import artifacts, health, workspaces
+from workspace_service.routes import artifacts, files, health, workspaces
 from workspace_service.services.artifact_service import ArtifactService
+from workspace_service.services.file_service import WorkspaceFileService
 from workspace_service.services.workspace_service import WorkspaceService
 
 
@@ -66,9 +71,19 @@ def artifact_service(
 
 
 @pytest.fixture
+def file_service(
+    workspace_repo: InMemoryWorkspaceRepository,
+    artifact_store: InMemoryArtifactStore,
+    settings: Settings,
+) -> WorkspaceFileService:
+    return WorkspaceFileService(workspace_repo, artifact_store, settings)
+
+
+@pytest.fixture
 async def client(
     workspace_service: WorkspaceService,
     artifact_service: ArtifactService,
+    file_service: WorkspaceFileService,
 ) -> AsyncIterator[AsyncClient]:
     async def _service_error_handler(request: Request, exc: Exception) -> JSONResponse:
         se = (
@@ -87,14 +102,27 @@ async def client(
         }
         return JSONResponse(status_code=se.status_code, content=body)
 
+    async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": "INTERNAL_ERROR",
+                "message": "Internal server error",
+                "retryable": True,
+            },
+        )
+
     app = FastAPI()
     app.include_router(health.router)
     app.include_router(workspaces.router)
     app.include_router(artifacts.router)
+    app.include_router(files.router)
     app.add_exception_handler(ServiceError, _service_error_handler)
+    app.add_exception_handler(Exception, _unhandled_error_handler)
 
     app.dependency_overrides[get_workspace_service] = lambda: workspace_service
     app.dependency_overrides[get_artifact_service] = lambda: artifact_service
+    app.dependency_overrides[get_file_service] = lambda: file_service
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:

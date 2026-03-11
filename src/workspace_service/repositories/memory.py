@@ -103,3 +103,10 @@ class InMemoryArtifactStore:
         keys_to_delete = [k for k in self._objects if k.startswith(prefix)]
         for key in keys_to_delete:
             del self._objects[key]
+
+    async def list_prefix(self, prefix: str) -> list[dict[str, str | int]]:
+        results: list[dict[str, str | int]] = []
+        for key, (content, _ct) in self._objects.items():
+            if key.startswith(prefix):
+                results.append({"key": key, "size": len(content)})
+        return results

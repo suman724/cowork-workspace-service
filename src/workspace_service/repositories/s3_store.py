@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -42,3 +42,11 @@ class S3ArtifactStore:
             for obj in page.get("Contents", []):
                 await self._s3.delete_object(Bucket=self._bucket, Key=obj["Key"])
         logger.info("s3_delete_prefix", bucket=self._bucket, prefix=prefix)
+
+    async def list_prefix(self, prefix: str) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        paginator = self._s3.get_paginator("list_objects_v2")
+        async for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                results.append({"key": cast(str, obj["Key"]), "size": cast(int, obj["Size"])})
+        return results

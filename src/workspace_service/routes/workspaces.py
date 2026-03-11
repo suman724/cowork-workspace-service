@@ -28,11 +28,14 @@ async def create_workspace(
         workspace_scope=body.workspace_scope,
         local_path=body.local_path,
     )
-    return {
+    result: dict[str, Any] = {
         "workspaceId": workspace.workspace_id,
         "workspaceScope": workspace.workspace_scope,
         "createdAt": workspace.created_at.isoformat(),
     }
+    if workspace.s3_workspace_prefix:
+        result["s3WorkspacePrefix"] = workspace.s3_workspace_prefix
+    return result
 
 
 @router.get("")

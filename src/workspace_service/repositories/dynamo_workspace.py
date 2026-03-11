@@ -79,6 +79,8 @@ def _to_item(ws: WorkspaceDomain) -> dict[str, Any]:
         item["localPath"] = ws.local_path
     if ws.local_path_key is not None:
         item["localPathKey"] = ws.local_path_key
+    if ws.s3_workspace_prefix is not None:
+        item["s3WorkspacePrefix"] = ws.s3_workspace_prefix
     if ws.ttl is not None:
         item["ttl"] = ws.ttl
     return item
@@ -92,6 +94,7 @@ def _from_item(item: dict[str, Any]) -> WorkspaceDomain:
         user_id=item["userId"],
         local_path=item.get("localPath"),
         local_path_key=item.get("localPathKey"),
+        s3_workspace_prefix=item.get("s3WorkspacePrefix"),
         created_at=datetime.fromisoformat(item["createdAt"]),
         last_active_at=datetime.fromisoformat(item["lastActiveAt"]),
         updated_at=datetime.fromisoformat(item["updatedAt"]) if item.get("updatedAt") else None,
